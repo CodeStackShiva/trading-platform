@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: order-service, labels: { app: order-service } }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: order-service } }
+  template:
+    metadata:
+      labels: { app: order-service }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /actuator/prometheus, prometheus.io/port: "8080" }
+    spec:
+      containers:
+        - name: order-service
+          image: registry.example.com/trading/order-service:1.0.0
+          ports: [{ containerPort: 8080 }]
+          envFrom: [{ configMapRef: { name: trading-config } }, { secretRef: { name: trading-secrets } }]
+          resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: 8080 }, initialDelaySeconds: 20 }
+          livenessProbe: { httpGet: { path: /actuator/health/liveness, port: 8080 }, initialDelaySeconds: 40 }
+          securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: order-service }
+spec:
+  selector: { app: order-service }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: order-service }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: order-service }
+  minReplicas: 3
+  maxReplicas: 12
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]

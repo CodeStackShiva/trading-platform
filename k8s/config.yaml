@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: trading-config }
+data:
+  KAFKA_BOOTSTRAP: kafka-bootstrap.messaging.svc:9092   # e.g. Strimzi / MSK / Event Hubs endpoint
+  DB_URL: jdbc:sqlserver://sqlserver.db.svc:1433;databaseName=orders;encrypt=true;trustServerCertificate=false
+---
+apiVersion: v1
+kind: Secret            # in real clusters: External Secrets / Vault / AWS Secrets Manager
+metadata: { name: trading-secrets }
+stringData: { DB_USER: orders_app, DB_PASSWORD: change-me }

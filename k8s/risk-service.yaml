@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: risk-service, labels: { app: risk-service } }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: risk-service } }
+  template:
+    metadata:
+      labels: { app: risk-service }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/path: /actuator/prometheus, prometheus.io/port: "8081" }
+    spec:
+      containers:
+        - name: risk-service
+          image: registry.example.com/trading/risk-service:1.0.0
+          ports: [{ containerPort: 8081 }]
+          envFrom: [{ configMapRef: { name: trading-config } }, { secretRef: { name: trading-secrets } }]
+          resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+          readinessProbe: { httpGet: { path: /actuator/health/readiness, port: 8081 }, initialDelaySeconds: 20 }
+          livenessProbe: { httpGet: { path: /actuator/health/liveness, port: 8081 }, initialDelaySeconds: 40 }
+          securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: risk-service }
+spec:
+  selector: { app: risk-service }
+  ports: [{ port: 80, targetPort: 8081 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: risk-service }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: risk-service }
+  minReplicas: 3
+  maxReplicas: 12
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
